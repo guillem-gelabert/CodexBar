@@ -11,6 +11,13 @@ public enum HookRunner {
     private static let log = CodexBarLog.logger(LogCategories.hooks)
     public static let maximumPayloadBytes = 4096
 
+    public enum DispatchOutcome: Equatable, Sendable {
+        case noMatchingRules
+        case rateLimited
+        /// At least one matching command was attempted, including failed launches.
+        case attempted
+    }
+
     /// Environment keys forwarded to a hook. Deliberately narrow: CodexBar's own
     /// process environment may hold provider API keys/tokens, and hooks must never
     /// receive secrets. Only these general-purpose vars pass through, plus the
@@ -55,15 +62,16 @@ public enum HookRunner {
 
     /// Runs every enabled rule matching the event, subject to the rate limiter.
     /// Fire-and-forget friendly: failures are logged, never thrown to the caller.
+    @discardableResult
     public static func dispatch(
         event: HookEvent,
         config: HooksConfig,
         rateLimiter: HookRateLimiter,
         rateLimitAccountDiscriminator: String? = nil,
-        baseEnvironment: [String: String] = ProcessInfo.processInfo.environment) async
+        baseEnvironment: [String: String] = ProcessInfo.processInfo.environment) async -> DispatchOutcome
     {
         let rules = config.matchingRules(for: event)
-        guard !rules.isEmpty else { return }
+        guard !rules.isEmpty else { return .noMatchingRules }
         // Quota events already dedupe upstream (threshold-crossing, depletion, and
         // reset-edge state), and rate-limiting them here would suppress a lower
         // remaining-quota warning that crosses within the window. Only the events
@@ -72,7 +80,7 @@ public enum HookRunner {
            await !rateLimiter.allow(event, accountDiscriminator: rateLimitAccountDiscriminator)
         {
             self.log.debug("suppressed by rate limiter", metadata: ["event": "\(event.event.rawValue)"])
-            return
+            return .rateLimited
         }
         for rule in rules {
             do {
@@ -95,6 +103,7 @@ public enum HookRunner {
                     ])
             }
         }
+        return .attempted
     }
 
     public static func failureSummary(_ error: Error) -> String {

@@ -345,8 +345,8 @@ extension CodexBarCLI {
 
           `watch` polls the selected providers and fires rules on real transitions, so hooks
           work without the macOS app. Events are edge-triggered against the previous poll, so a
-          persisting condition does not re-fire. Baselines are in-memory: the first poll of a
-          lane establishes state without firing. Keep one continuous process running so transition
+          persisting condition does not re-fire. The first successful poll can emit usage_updated;
+          quota-transition baselines are established without firing. Keep one continuous process so transition
           baselines and event rate limits survive between polls. Default interval 300s, minimum 60s.
 
         Examples:

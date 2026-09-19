@@ -154,15 +154,21 @@ extension CodexBarCLI {
     static func sampleHookEvent(type: HookEventType, provider: String) -> HookEvent {
         if type == .usageUpdated {
             let timestamp = Date()
-            return HookEvent(
-                event: type,
+            return HookEvent.usageUpdated(
                 provider: provider,
-                usagePercent: 0.5,
-                windowMinutes: 5 * 60,
-                resetAt: timestamp.addingTimeInterval(60 * 60),
-                secondaryUsagePercent: 0.4,
-                secondaryWindowMinutes: 7 * 24 * 60,
-                secondaryResetAt: timestamp.addingTimeInterval(4 * 24 * 60 * 60),
+                snapshot: UsageSnapshot(
+                    primary: RateWindow(
+                        usedPercent: 50,
+                        windowMinutes: 300,
+                        resetsAt: timestamp.addingTimeInterval(3600),
+                        resetDescription: nil),
+                    secondary: RateWindow(
+                        usedPercent: 40,
+                        windowMinutes: 10080,
+                        resetsAt: timestamp.addingTimeInterval(4 * 86400),
+                        resetDescription: nil),
+                    updatedAt: timestamp),
+                account: nil,
                 timestamp: timestamp)
         }
         let usagePercent: Double?

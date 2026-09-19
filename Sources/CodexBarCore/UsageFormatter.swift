@@ -205,7 +205,11 @@ public enum UsageFormatter {
     }
 
     public static func creditsString(from value: Double) -> String {
-        self.localized("%@ left", self.creditsNumberString(from: value))
+        self.remainingString(from: self.creditsNumberString(from: value))
+    }
+
+    public static func remainingString(from formattedValue: String) -> String {
+        self.localized("%@ left", formattedValue)
     }
 
     public static func creditsNumberString(from value: Double) -> String {
@@ -332,12 +336,13 @@ public enum UsageFormatter {
     }
 
     public static func tokenCountString(_ value: Int) -> String {
-        let absValue = abs(value)
+        let absValue = value.magnitude
         let sign = value < 0 ? "-" : ""
 
-        let units: [(threshold: Int, divisor: Double, suffix: String)] = [
-            (1_000_000_000, 1_000_000_000, "B"),
-            (1_000_000, 1_000_000, "M"),
+        // Promote at the point where whole lower units would round to 1000.
+        let units: [(threshold: UInt, divisor: Double, suffix: String)] = [
+            (999_500_000, 1_000_000_000, "B"),
+            (999_500, 1_000_000, "M"),
             (1000, 1000, "K"),
         ]
 

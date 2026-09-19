@@ -878,9 +878,7 @@ extension StatusItemController {
         // Provider-specific by design: legacy preferences select balance text before quota and display modes.
         let usesBalance = switch provider {
         case .openrouter: preference == .automatic
-        case .mistral:
-            preference != .monthlyPlan
-                || snapshot?.extraRateWindows?.contains { $0.id == "mistral-monthly-plan" } != true
+        case .mistral: self.menuBarMetricWindow(for: provider, snapshot: snapshot, now: now) == nil
         default: true
         }
         if usesBalance, let balance = Self.menuBarBalanceDisplayText(provider: provider, snapshot: snapshot) {
@@ -1212,12 +1210,7 @@ extension StatusItemController {
         if !layoutResolution.usesLegacyRendering,
            self.settings.menuBarIconStyle == .iconAndPercent
         {
-            let showsReset = layoutResolution.layout
-                .flattenedTokens(conditionals: self.settings.menuBarLayoutConditionals)
-                .contains { $0 == .resetCountdown || $0 == .resetAbsolute }
-            guard showsReset else { return [] }
-            let window = self.menuBarLayoutWindows(provider: provider, snapshot: snapshot, now: now).automatic
-            return window?.resetsAt.map { [$0] } ?? []
+            return self.menuBarLayoutResetDates(for: provider, now: now)
         }
         let mode = self.settings.menuBarDisplayMode
 

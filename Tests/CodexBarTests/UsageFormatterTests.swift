@@ -167,6 +167,16 @@ struct UsageFormatterTests {
     }
 
     @Test
+    func `formatted remaining value uses localized left template`() {
+        UsageFormatter.setLocalizationProvider { key in
+            key == "%@ left" ? "%@ übrig" : key
+        }
+        defer { UsageFormatter.clearLocalizationProvider() }
+
+        #expect(UsageFormatter.remainingString(from: "€24.99") == "€24.99 übrig")
+    }
+
+    @Test
     func `tomorrow reset description uses localized format`() throws {
         UsageFormatter.setLocalizationProvider { key in
             key == "reset_tomorrow_format" ? "明日 %@" : key
@@ -395,6 +405,28 @@ struct UsageFormatterTests {
         #expect(UsageFormatter.tokenCountString(0) == "0")
         #expect(UsageFormatter.tokenCountString(987) == "987")
         #expect(UsageFormatter.tokenCountString(-42) == "-42")
+    }
+
+    @Test
+    func `token count string promotes rounded unit boundaries`() {
+        #expect(UsageFormatter.tokenCountString(999_499) == "999K")
+        #expect(UsageFormatter.tokenCountString(999_500) == "1M")
+        #expect(UsageFormatter.tokenCountString(999_999) == "1M")
+        #expect(UsageFormatter.tokenCountString(999_499_999) == "999M")
+        #expect(UsageFormatter.tokenCountString(999_500_000) == "1B")
+        #expect(UsageFormatter.tokenCountString(999_999_999) == "1B")
+        #expect(UsageFormatter.tokenCountString(-999_499) == "-999K")
+        #expect(UsageFormatter.tokenCountString(-999_500) == "-1M")
+        #expect(UsageFormatter.tokenCountString(-999_999) == "-1M")
+        #expect(UsageFormatter.tokenCountString(-999_499_999) == "-999M")
+        #expect(UsageFormatter.tokenCountString(-999_500_000) == "-1B")
+        #expect(UsageFormatter.tokenCountString(-999_999_999) == "-1B")
+    }
+
+    @Test
+    func `token count string handles integer limits`() {
+        #expect(UsageFormatter.tokenCountString(Int.max) == "9223372037B")
+        #expect(UsageFormatter.tokenCountString(Int.min) == "-9223372037B")
     }
 
     @Test

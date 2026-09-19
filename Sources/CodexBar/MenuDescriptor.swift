@@ -96,6 +96,7 @@ struct MenuDescriptor {
         codexWorkspacesMenuEnabled: Bool = false,
         agentSessionsEnabled: Bool = false,
         agentSessionLabelStyle: AgentSessionLabelStyle = .project,
+        agentSessionsHideUnreachableHosts: Bool = false,
         localAgentSessions: [AgentSession] = [],
         remoteAgentHosts: [RemoteSessionHostResult] = [],
         now: Date = Date()) -> MenuDescriptor
@@ -155,6 +156,7 @@ struct MenuDescriptor {
                 localSessions: localAgentSessions,
                 remoteHosts: remoteAgentHosts,
                 labelStyle: agentSessionLabelStyle,
+                hideUnreachableHosts: agentSessionsHideUnreachableHosts,
                 now: now))
         }
         sections.append(Self.metaSection(updateReady: updateReady))
@@ -166,9 +168,11 @@ struct MenuDescriptor {
         localSessions: [AgentSession],
         remoteHosts: [RemoteSessionHostResult],
         labelStyle: AgentSessionLabelStyle = .project,
+        hideUnreachableHosts: Bool = false,
         now: Date = Date()) -> Section
     {
-        let totalCount = localSessions.count + remoteHosts.reduce(0) { $0 + $1.sessions.count }
+        let visibleRemoteHosts = hideUnreachableHosts ? remoteHosts.filter(\.isReachable) : remoteHosts
+        let totalCount = localSessions.count + visibleRemoteHosts.reduce(0) { $0 + $1.sessions.count }
         var entries: [Entry] = [.text("Agent Sessions (\(totalCount))", .headline)]
 
         for session in localSessions {
@@ -176,7 +180,7 @@ struct MenuDescriptor {
                 self.agentSessionRowTitle(session, labelStyle: labelStyle, now: now),
                 .focusAgentSession(session, remoteHost: nil)))
         }
-        for remoteHost in remoteHosts {
+        for remoteHost in visibleRemoteHosts {
             if let error = remoteHost.error {
                 entries.append(.unavailable("\(remoteHost.host) — unreachable", error))
                 continue
@@ -704,6 +708,7 @@ struct MenuDescriptor {
         metadata: ProviderMetadata,
         snapshot: UsageSnapshot) -> (primary: String, secondary: String, tertiary: String, showsTertiary: Bool)
     {
+        let presentation = ProviderDescriptorRegistry.descriptor(for: provider).presentation
         if provider == .factory, snapshot.tertiary != nil {
             return (L("5-hour"), L("Weekly"), L("Monthly"), true)
         }
@@ -726,7 +731,7 @@ struct MenuDescriptor {
         } else if provider == .alibabatokenplan {
             AlibabaTokenPlanProviderDescriptor.primaryLabel(window: snapshot.primary) ?? metadata.sessionLabel
         } else {
-            metadata.sessionLabel
+            presentation.rateWindowLabels(metadata: metadata, snapshot: snapshot).primary
         }
         let secondaryLabel = if provider == .codex {
             CodexConsumerProjection.rateTitle(

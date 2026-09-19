@@ -22,11 +22,6 @@ extension UsageStore {
         accountDiscriminator: String? = nil,
         accountDisplayName: String? = nil)
     {
-        guard let hooks = self.settings.config.hooks,
-              hooks.enabled,
-              hooks.events.count <= HooksConfig.maximumRuleCount
-        else { return }
-
         let event = HookEvent(
             event: type,
             provider: provider.rawValue,
@@ -40,7 +35,14 @@ extension UsageStore {
             secondaryResetAt: secondaryResetAt,
             status: status,
             timestamp: Date())
+        self.dispatchHookEvent(event, accountDiscriminator: accountDiscriminator)
+    }
 
+    private func dispatchHookEvent(_ event: HookEvent, accountDiscriminator: String?) {
+        guard let hooks = self.settings.config.hooks,
+              hooks.enabled,
+              hooks.events.count <= HooksConfig.maximumRuleCount
+        else { return }
         let limiter = self.hookRateLimiter
         let environment = self.environmentBase
         Task.detached(priority: .utility) {
@@ -54,7 +56,7 @@ extension UsageStore {
     }
 
     /// Offers the quota snapshot after every successful provider refresh; hook
-    /// delivery can be coalesced by the rate limiter. The primary and secondary
+    /// repeated attempts are dropped by the rate limiter. The primary and secondary
     /// windows stay in one event so consumers can evaluate both without another fetch.
     func emitUsageUpdatedHook(
         provider: UsageProvider,
@@ -62,20 +64,15 @@ extension UsageStore {
         rateKey: String? = nil)
     {
         guard self.hasQuotaHookRule(event: .usageUpdated, provider: provider) else { return }
-        let primary = snapshot.primary.flatMap { $0.isSyntheticPlaceholder ? nil : $0 }
-        let secondary = snapshot.secondary.flatMap { $0.isSyntheticPlaceholder ? nil : $0 }
-        self.emitHook(
-            .usageUpdated,
-            provider: provider,
-            usagePercent: primary.map { $0.usedPercent / 100 },
-            windowMinutes: primary?.windowMinutes,
-            resetAt: primary?.resetsAt,
-            secondaryUsagePercent: secondary.map { $0.usedPercent / 100 },
-            secondaryWindowMinutes: secondary?.windowMinutes,
-            secondaryResetAt: secondary?.resetsAt,
+        let event = HookEvent.usageUpdated(
+            provider: provider.rawValue,
+            snapshot: snapshot,
+            account: self.settings.hidePersonalInfo ? nil
+                : self.hookAccountDisplayName(provider: provider, snapshot: snapshot))
+        self.dispatchHookEvent(
+            event,
             accountDiscriminator: rateKey
-                ?? Self.hookAccountDiscriminator(provider: provider, snapshot: snapshot),
-            accountDisplayName: self.hookAccountDisplayName(provider: provider, snapshot: snapshot))
+                ?? Self.hookAccountDiscriminator(provider: provider, snapshot: snapshot))
     }
 
     func emitQuotaReachedHook(
@@ -262,9 +259,10 @@ extension UsageStore {
     /// Coarse, non-secret category for a refresh failure. Never forwards the raw
     /// error description, which can include provider response-body previews.
     nonisolated static func refreshFailureHookStatus(_ error: Error) -> String {
-        if error is CancellationError { return "cancelled" }
+        let transportError = self.underlyingProviderTransportError(error)
+        if transportError is CancellationError { return "cancelled" }
         if isPermissionPromptWaiting(error) { return "auth_required" }
-        let nsError = error as NSError
+        let nsError = transportError as NSError
         if nsError.domain == NSURLErrorDomain {
             switch nsError.code {
             case NSURLErrorCancelled:

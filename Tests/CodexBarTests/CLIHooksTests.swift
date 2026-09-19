@@ -5,6 +5,34 @@ import Testing
 
 struct CLIHooksTests {
     @Test
+    func `watch privacy keeps account routing private and skips synthetic lanes`() {
+        let usage = UsageSnapshot(
+            primary: RateWindow(usedPercent: 0, windowMinutes: 300, resetsAt: nil, resetDescription: nil),
+            secondary: RateWindow(
+                usedPercent: 0,
+                windowMinutes: nil,
+                resetsAt: nil,
+                resetDescription: nil,
+                isSyntheticPlaceholder: true),
+            updatedAt: Date())
+            .withIdentity(ProviderIdentitySnapshot(
+                providerID: .codex,
+                accountEmail: "fixture@example.invalid",
+                accountOrganization: nil,
+                loginMethod: nil))
+        let lanes = CodexBarCLI.hooksWatchLanes(
+            provider: .codex,
+            usage: usage,
+            config: CodexBarConfig(providers: []),
+            accountDiscriminator: "private-owner",
+            hidesPersonalInfo: true)
+        #expect(lanes.count == 1)
+        #expect(lanes.first?.accountDisplayName == nil)
+        #expect(lanes.first?.key.accountDiscriminator == "private-owner")
+        #expect(lanes.first?.rateWindow?.usedPercent == 0)
+    }
+
+    @Test
     func `sample quota-low event matches maximum threshold`() {
         let event = CodexBarCLI.sampleHookEvent(type: .quotaLow, provider: UsageProvider.codex.rawValue)
         let rule = HookRule(event: .quotaLow, threshold: 1, executable: "/bin/echo")

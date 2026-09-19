@@ -83,8 +83,8 @@ Events:
   rules without a threshold use the provider's configured warning thresholds.
 - `quota_reached`: the primary session quota crosses into depletion.
 - `quota_reset`: a confirmed session or weekly reset occurs.
-- `usage_updated`: the macOS app published a successful, current provider refresh. It can fire when values are
-  unchanged and is coalesced per provider/account for ten minutes. `usagePercent`, `windowMinutes`, and `resetAt`
+- `usage_updated`: the macOS app published a successful, current provider refresh, or `hooks watch` completed a
+  successful poll. It can fire when values are unchanged. `usagePercent`, `windowMinutes`, and `resetAt`
   describe the positional primary window; `secondaryUsagePercent`, `secondaryWindowMinutes`, and
   `secondaryResetAt` describe the positional secondary window. Synthetic placeholder windows are omitted.
 - `provider_unavailable`: a provider status changes to a minor, major, or critical outage.
@@ -92,10 +92,12 @@ Events:
 - `refresh_failed`: a provider refresh fails; `CODEXBAR_STATUS` is a coarse category such as `timeout`, `offline`,
   `network_error`, `auth_required`, `cancelled`, or `error`.
 
-`usage_updated`, `provider_unavailable`, and `refresh_failed` are coalesced per provider/account/window for ten
-minutes so background refreshes cannot create command storms. Quota and recovery events use their transition
-detectors instead. Hook failures are contained and never block provider refresh. `codexbar hooks watch` emits only
-transition events; it does not emit `usage_updated`.
+`usage_updated`, `provider_unavailable`, and `refresh_failed` allow the first matching attempt immediately,
+then drop further attempts for the same provider/account/window for 600 seconds. Failed command attempts consume
+that interval; unmatched rules do not. There is no queued latest value or trailing delivery. Restarting resets
+the in-memory limiter. Quota and recovery events use their transition detectors instead. Hook failures are
+contained and never block app provider refresh. `hooks watch` reports only events whose command execution was
+attempted, including failed commands, rather than suppressed candidates.
 
 Payload environment variables are `CODEXBAR_EVENT`, `CODEXBAR_PROVIDER`, `CODEXBAR_TIMESTAMP`, and, when available,
 `CODEXBAR_ACCOUNT`, `CODEXBAR_WINDOW`, `CODEXBAR_USAGE_PERCENT`, `CODEXBAR_USED`, `CODEXBAR_LIMIT`,
